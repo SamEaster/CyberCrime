@@ -1,19 +1,38 @@
 import praw
 import datetime
-# from textblob import TextBlob
 import pandas as pd
+from sentence_transformers import SentenceTransformer, util
 
 
 class SocialMediaMonitor:
     def __init__(self, client_id, client_secret, user_agent):
-        # Initialize the Reddit API connection
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
         self.reddit = praw.Reddit(
             client_id=client_id,
             client_secret=client_secret,
             user_agent=user_agent
         )
-        # Target specific communities known for reporting crimes/scams
+
         self.target_subreddits = ['Scams', 'CyberSecurity', 'IdentityTheft', 'fraud']
+
+    def get_embedding(self, text):
+        """Converts a single string into a vector (list of numbers)."""
+        return self.model.encode(text, convert_to_tensor=True)
+    
+    def similarity_score(self, text):
+        
+        stored_posts = [] ### extract from the database
+
+        if stored_posts is None:
+            return 1
+        
+        new_embedding = self.model.encode(text, convert_to_tensor=True)
+        cosine_scores = util.cos_sim(new_embedding, stored_posts)[0]
+
+        ### total score
+        # score = cosine_scores
+        # return 
+
 
     def fetch_recent_incidents(self, limit=10):
         """

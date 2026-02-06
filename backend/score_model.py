@@ -1,9 +1,118 @@
 import numpy as np
 import pandas as pd
+import joblib
 
+CITY_TIER_MAP = {
+        
+        "bangalore": 1,
+        "bengaluru": 1,
+        "delhi": 1,
+        "chennai": 1,
+        "hyderabad": 1,
+        "mumbai": 1,
+        "pune": 1,
+        "kolkata": 1,
+        "ahmedabad": 1,
 
-import pandas as pd
-import numpy as np
+        "amritsar": 2,
+        "bhopal": 2,
+        "bhubaneswar": 2,
+        "chandigarh": 2,
+        "faridabad": 2,
+        "ghaziabad": 2,
+        "jamshedpur": 2,
+        "jaipur": 2,
+        "kochi": 2,
+        "lucknow": 2,
+        "nagpur": 2,
+        "patna": 2,
+        "raipur": 2,
+        "surat": 2,
+        "visakhapatnam": 2,
+        "agra": 2,
+        "ajmer": 2,
+        "kanpur": 2,
+        "mysuru": 2,
+        "mysore": 2,
+        "srinagar": 2,
+
+        "etawah": 3,
+        "roorkee": 3,
+        "rajahmundry": 3,
+        "rajamundry": 3,
+        "bhatinda": 3,
+        "bathinda": 3,
+        "hajipur": 3,
+        "rohtak": 3,
+        "hosur": 3,
+        "junagadh": 3,
+        "udaipur": 3,
+        "salem": 3,
+        "jhansi": 3,
+        "madurai": 3,
+        "vijayawada": 3,
+        "meerut": 3,
+        "mathura": 3,
+        "bikaner": 3,
+        "cuttack": 3,
+        "nashik": 3,
+
+        "banswara": 4,
+        "bhadreswar": 4,
+        "chilakaluripet": 4,
+        "datia": 4,
+        "gangtok": 4,
+        "kalyani": 4,
+        "kapurthala": 4,
+        "kasganj": 4,
+        "nagda": 4,
+        "sujangarh": 4,
+}
+
+victim_weights = {
+    'Government': 10, 'Health': 9, 'Financial': 8, 'Corporate': 7,
+    'Educational': 6, 'E-commerce': 5, 'Social Media': 4, 'Personal': 2
+}
+
+def process_cities(series):
+        return series.astype('str').str.lower().map(CITY_TIER_MAP).fillna(0)
+
+frozen_data = joblib.load("data/risk_model.joblib")
+
+def previous_count(data):
+    categories = ['Cyber Bullying', 'Data Breach',
+        'Hacking', 'Identity Theft', 'Malware', 'Online Fraud', 'Others',
+        'Phishing', 'Ransomware']
+
+    for cat in categories:
+        data[f'prev_{cat}'] = 0
+
+    if data['Year']!=frozen_data['past_incidents']['Year']:
+      for cat in categories:
+        data[f"prev_{cat}"] = data[cat]
+
+    else:
+      for cat in categories:
+        data[f"prev_{cat}"] = data[cat] + frozen_data['past_incidents'][f'prev_{cat}']
+
+    return data
+
+def scoring_model(x):
+
+    if x['Category'].dtype=='O':
+        x['Category'] = x['Category'].map(victim_weights)
+
+    if x['City'].dtype=='O':
+        x['City'] = x['City'].map(process_cities)
+    
+    x["Amount_Lost_INR"] = np.sqrt(x["Amount_Lost_INR"])
+
+    x = previous_count(x)
+    x = pd.DataFrame([x])
+    x = x[frozen_data['cols']]
+
+    return frozen_data['model'].predict()
+
 
 def calculate_importance_score(df):
 
@@ -81,7 +190,20 @@ def calculate_importance_score(df):
 
     # df['Risk_Score'] = df['Risk_Score'].round(2)
     
-    df = df.sort_values(by='Risk_Score', ascending=False)
-
+    # df = df.sort_values(by='Risk_Score', ascending=False)
     return df
 
+
+if __name__ == "__main__":
+
+    path = "data/n_cyber_crime.csv"
+    # df = pd.read_csv(path)
+
+    # n_df = calculate_importance_score(df)
+    # x = df
+    # y = calculate_importance_score(df)
+
+    print(frozen_data.keys())
+
+
+    
