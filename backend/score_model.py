@@ -1,209 +1,114 @@
+import os
 import numpy as np
 import pandas as pd
-import joblib
 
-CITY_TIER_MAP = {
-        
-        "bangalore": 1,
-        "bengaluru": 1,
-        "delhi": 1,
-        "chennai": 1,
-        "hyderabad": 1,
-        "mumbai": 1,
-        "pune": 1,
-        "kolkata": 1,
-        "ahmedabad": 1,
+CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'n_cyber_crime.csv')
 
-        "amritsar": 2,
-        "bhopal": 2,
-        "bhubaneswar": 2,
-        "chandigarh": 2,
-        "faridabad": 2,
-        "ghaziabad": 2,
-        "jamshedpur": 2,
-        "jaipur": 2,
-        "kochi": 2,
-        "lucknow": 2,
-        "nagpur": 2,
-        "patna": 2,
-        "raipur": 2,
-        "surat": 2,
-        "visakhapatnam": 2,
-        "agra": 2,
-        "ajmer": 2,
-        "kanpur": 2,
-        "mysuru": 2,
-        "mysore": 2,
-        "srinagar": 2,
-
-        "etawah": 3,
-        "roorkee": 3,
-        "rajahmundry": 3,
-        "rajamundry": 3,
-        "bhatinda": 3,
-        "bathinda": 3,
-        "hajipur": 3,
-        "rohtak": 3,
-        "hosur": 3,
-        "junagadh": 3,
-        "udaipur": 3,
-        "salem": 3,
-        "jhansi": 3,
-        "madurai": 3,
-        "vijayawada": 3,
-        "meerut": 3,
-        "mathura": 3,
-        "bikaner": 3,
-        "cuttack": 3,
-        "nashik": 3,
-
-        "banswara": 4,
-        "bhadreswar": 4,
-        "chilakaluripet": 4,
-        "datia": 4,
-        "gangtok": 4,
-        "kalyani": 4,
-        "kapurthala": 4,
-        "kasganj": 4,
-        "nagda": 4,
-        "sujangarh": 4,
-}
-
-victim_weights = {
-    'Government': 10, 'Health': 9, 'Financial': 8, 'Corporate': 7,
-    'Educational': 6, 'E-commerce': 5, 'Social Media': 4, 'Personal': 2
-}
-
-def process_cities(series):
-        return series.astype('str').str.lower().map(CITY_TIER_MAP).fillna(0)
-
-frozen_data = joblib.load("data/risk_model.joblib")
-
-def previous_count(data):
-    categories = ['Cyber Bullying', 'Data Breach',
-        'Hacking', 'Identity Theft', 'Malware', 'Online Fraud', 'Others',
-        'Phishing', 'Ransomware']
-
-    for cat in categories:
-        data[f'prev_{cat}'] = 0
-
-    if data['Year']!=frozen_data['past_incidents']['Year']:
-      for cat in categories:
-        data[f"prev_{cat}"] = data[cat]
-
-    else:
-      for cat in categories:
-        data[f"prev_{cat}"] = data[cat] + frozen_data['past_incidents'][f'prev_{cat}']
-
-    return data
-
-def scoring_model(x):
-
-    if x['Category'].dtype=='O':
-        x['Category'] = x['Category'].map(victim_weights)
-
-    if x['City'].dtype=='O':
-        x['City'] = x['City'].map(process_cities)
-    
-    x["Amount_Lost_INR"] = np.sqrt(x["Amount_Lost_INR"])
-
-    x = previous_count(x)
-    x = pd.DataFrame([x])
-    x = x[frozen_data['cols']]
-
-    return frozen_data['model'].predict()
+THREAT_COLS = [
+    'Ransomware', 'Data Breach', 'Hacking', 'Malware',
+    'Identity Theft', 'Phishing', 'Online Fraud',
+    'Cyber Bullying', 'Others',
+]
 
 
 def calculate_importance_score(df):
+    """
+    Calculate a risk score guaranteed to be in [0, 10].
+    Each sub-score is normalized to [0, 10], weights sum to 1.0,
+    and a final clamp ensures the result never exceeds 10.
+    """
+    df = df.copy()
 
-    W_FINANCE = 0.3    
-    W_CONTEXT = 0.4
-    W_HISTORY = 0.15   
-    W_RECENCY = 0.15   
+    W_FINANCE = 0.30
+    W_CONTEXT = 0.35
+    W_HISTORY = 0.15
+    W_CITY    = 0.05
+    W_RECENCY = 0.15
 
     risk_map = {
-        'Government': {'Ransomware': 10, 'Hacking': 10, 'Data Breach': 9, 'Malware': 7, 'default': 6},
-        'Health':     {'Ransomware': 10, 'Data Breach': 9, 'Malware': 8, 'default': 5},
-        'Financial':  {'Online Fraud': 10, 'Identity Theft': 9, 'Phishing': 9, 'Hacking': 8, 'default': 5},
-        'Corporate':  {'Ransomware': 9, 'Data Breach': 9, 'Hacking': 8, 'default': 5},
-        'Educational':{'Cyber Bullying': 9, 'Data Breach': 7, 'Phishing': 6, 'default': 4},
-        'E-commerce': {'Online Fraud': 9, 'Identity Theft': 9, 'Hacking': 7, 'default': 5},
+        'Government':  {'Ransomware': 10, 'Hacking': 10, 'Data Breach': 9, 'Malware': 7, 'default': 6},
+        'Health':      {'Ransomware': 10, 'Data Breach': 9, 'Malware': 8, 'default': 5},
+        'Financial':   {'Online Fraud': 10, 'Identity Theft': 9, 'Phishing': 9, 'Hacking': 8, 'default': 5},
+        'Corporate':   {'Ransomware': 9, 'Data Breach': 9, 'Hacking': 8, 'default': 5},
+        'Educational': {'Cyber Bullying': 9, 'Data Breach': 7, 'Phishing': 6, 'default': 4},
+        'E-commerce':  {'Online Fraud': 9, 'Identity Theft': 9, 'Hacking': 7, 'default': 5},
         'Social Media':{'Cyber Bullying': 9, 'Identity Theft': 8, 'Phishing': 7, 'default': 4},
-        'Personal':   {'Identity Theft': 8, 'Online Fraud': 8, 'Cyber Bullying': 7, 'default': 3}
+        'Personal':    {'Identity Theft': 8, 'Online Fraud': 8, 'Cyber Bullying': 7, 'default': 3},
     }
 
-    threat_cols = [
-        'Ransomware', 'Data Breach', 'Hacking', 'Malware',
-        'Identity Theft', 'Phishing', 'Online Fraud',
-        'Cyber Bullying', 'Others'
-    ]
+    # --- Ensure numeric types early ---
+    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(2025).astype(int)
+    df['Amount_Lost_INR'] = pd.to_numeric(df['Amount_Lost_INR'], errors='coerce').fillna(0)
 
-    fin_score = np.log1p(df['Amount_Lost_INR'])
-    if fin_score.max() > 0:
-        fin_score = (fin_score / fin_score.max()) * 10
-    else:
-        fin_score = 0
+    # --- 1. Financial score (0-10) via log-normalisation ---
+    fin_raw = np.log1p(df['Amount_Lost_INR'].astype(float))
+    fin_max = fin_raw.max()
+    fin_score = (fin_raw / fin_max * 10) if fin_max > 0 else pd.Series(0.0, index=df.index)
 
-    
+    # --- 2. Context severity score (0-10) from category × threat map ---
     def get_context_severity(row):
         category = row.get('Category', 'Personal')
         sector_risks = risk_map.get(category, risk_map['Personal'])
-        
         max_severity = 0
-        for threat in threat_cols:
+        for threat in THREAT_COLS:
             if row.get(threat, 0) == 1:
                 severity = sector_risks.get(threat, sector_risks.get('default', 3))
                 max_severity = max(max_severity, severity)
-        
         return max_severity if max_severity > 0 else sector_risks.get('default', 3)
 
-    context_score = df.apply(get_context_severity, axis=1)
+    context_score = df.apply(get_context_severity, axis=1).clip(0, 10)
 
-
+    # --- 3. History score (0-10) from previous incident counts ---
     history_scores_raw = np.zeros(len(df))
-    
-    for threat in threat_cols:
+    for threat in THREAT_COLS:
         prev_col = f"prev_{threat}"
         if prev_col in df.columns:
+            df[prev_col] = pd.to_numeric(df[prev_col], errors='coerce').fillna(0)
             mask = df[threat] == 1
-            history_scores_raw[mask] += np.log1p(df.loc[mask, prev_col])
+            history_scores_raw[mask] += np.log1p(df.loc[mask, prev_col].values)
 
     max_hist = history_scores_raw.max()
     history_score = (history_scores_raw / max_hist * 10) if max_hist > 0 else history_scores_raw
-    history_score += max(df['City']) - df['City'] + 2
+    history_score = np.clip(history_score, 0, 10)
 
-
-    if 'Year' in df.columns:
-        year_diff = df['Year'] - df['Year'].min()
-        recency_score = np.exp(year_diff) 
-        recency_score = (recency_score / recency_score.max()) * 10
-
+    # --- 4. City hotspot score (0-10) from frequency ---
+    if not pd.api.types.is_numeric_dtype(df['City']):
+        if os.path.exists(CSV_PATH):
+            hist = pd.read_csv(CSV_PATH)
+            city_freq = hist['City'].value_counts().to_dict()
+            city_numeric = df['City'].map(lambda c: city_freq.get(c, 1)).astype(float)
+        else:
+            city_numeric = pd.Series(1.0, index=df.index)
     else:
-        recency_score = 5 
+        city_numeric = df['City'].astype(float)
 
+    city_max = city_numeric.max()
+    city_min = city_numeric.min()
+    if city_max > city_min:
+        city_score = ((city_numeric - city_min) / (city_max - city_min) * 10)
+    else:
+        city_score = pd.Series(5.0, index=df.index)
+    city_score = city_score.clip(0, 10)
+
+    # --- 5. Recency score (0-10) — more recent years score higher ---
+    if 'Year' in df.columns and df['Year'].nunique() > 1:
+        year_min = df['Year'].min()
+        year_diff = (df['Year'] - year_min).astype(float)
+        recency_raw = np.exp(year_diff)
+        recency_score = (recency_raw / recency_raw.max()) * 10
+    else:
+        recency_score = pd.Series(5.0, index=df.index)
+    recency_score = np.clip(recency_score, 0, 10)
+
+    # --- Weighted combination & final clamp to [0, 10] ---
     df['Risk_Score'] = (
-        (W_FINANCE * fin_score) +
-        (W_CONTEXT * context_score) +
-        (W_HISTORY * history_score) +
-        (W_RECENCY * recency_score)
-    )
+        W_FINANCE * fin_score +
+        W_CONTEXT * context_score +
+        W_HISTORY * history_score +
+        W_CITY    * city_score +
+        W_RECENCY * recency_score
+    ).round(2).clip(0, 10)
 
-    # df['Risk_Score'] = df['Risk_Score'].round(2)
-    
-    # df = df.sort_values(by='Risk_Score', ascending=False)
+    df = df.sort_values(by='Risk_Score', ascending=False)
+
     return df
-
-
-if __name__ == "__main__":
-
-    path = "data/n_cyber_crime.csv"
-    # df = pd.read_csv(path)
-
-    # n_df = calculate_importance_score(df)
-    # x = df
-    # y = calculate_importance_score(df)
-
-    print(frozen_data.keys())
-
-
-    
