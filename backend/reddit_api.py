@@ -16,12 +16,11 @@ class SocialMediaMonitor:
         self.target_subreddits = ['Scams', 'CyberSecurity', 'IdentityTheft', 'fraud']
 
     def get_embedding(self, text):
-        """Converts a single string into a vector (list of numbers)."""
         return self.model.encode(text, convert_to_tensor=True)
     
     def similarity_score(self, text):
         
-        stored_posts = [] ### extract from the database
+        stored_posts = []
 
         if stored_posts is None:
             return 1
@@ -38,31 +37,21 @@ class SocialMediaMonitor:
         """
         Fetches the 'limit' most recent posts from target subreddits.
         """
-        print(f"📡 Connecting to Social Stream (Reddit)...")
+        print(f" Connecting to Social Stream (Reddit)...")
         posts_data = []
 
-        # Combine subreddits into one stream (e.g., "Scams+fraud")
         subreddit_query = "+".join(self.target_subreddits)
         subreddit = self.reddit.subreddit(subreddit_query)
 
-        # Fetch 'New' posts to simulate real-time intake
         for post in subreddit.new(limit=limit):
             
-            # 1. Basic Extraction
             title = post.title
             body = post.selftext[:500] + "..." # Truncate long text
             full_text = f"{title} {body}"
             
-            # 2. Simple Keyword Check (The "Heuristic" Layer)
             risk_keywords = ['urgent', 'money', 'bank', 'police', 'hack', 'steal', 'wallet']
             flagged = any(word in full_text.lower() for word in risk_keywords)
-
-            # 3. Sentiment Analysis (The "Sentiment Engine")
-            # Polarity: -1 (Negative/Angry) to +1 (Positive/Happy)
-            # blob = TextBlob(full_text)
-            # sentiment_score = blob.sentiment.polarity
             
-            # 4. Construct the Data Object
             incident = {
                 'source_id': post.id,
                 'platform': 'Reddit',
@@ -78,24 +67,17 @@ class SocialMediaMonitor:
 
         return pd.DataFrame(posts_data)
 
-# text api -> swa
-
-# --- CONFIGURATION (REPLACE WITH YOUR KEYS) ---
 CLIENT_ID = 'YOUR_REDDIT_CLIENT_ID'
 CLIENT_SECRET = 'YOUR_REDDIT_CLIENT_SECRET'
 USER_AGENT = 'RiskBot'
 
-# --- EXECUTION ---
 if __name__ == "__main__":
     try:
-        # 1. Initialize Monitor
         monitor = SocialMediaMonitor(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
         
-        # 2. Get Data
         df = monitor.fetch_recent_incidents(limit=5)
         
-        # 3. Display Result (Mocking the "Ingestion" phase)
-        print("\n--- 🚨 RECENT DETECTED SIGNALS ---")
+        print("\n--- RECENT DETECTED SIGNALS ---")
         if not df.empty:
             # Show only high-risk or relevant columns
             print(df[['timestamp', 'subreddit', 'content', 'is_flagged']].to_string(index=False))
